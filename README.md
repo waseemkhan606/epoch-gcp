@@ -39,6 +39,52 @@ runtime.
 
 ---
 
+## What you're verifying
+
+`verify.sh` asserts that the foundation is **correct and minimal** — not that
+anything is *running*. Five assertions:
+
+| Assertion | What it proves | How it's checked |
+|---|---|---|
+| Image present in Artifact Registry | The 17.1 container reached the cloud and 17.3 can pull it | `gcloud artifacts docker images list` shows `epoch-api:v1` |
+| Service account exists | There is a dedicated runtime identity to deploy *as* | `gcloud iam service-accounts describe epoch-gateway-sa@…` |
+| **Exactly 4 IAM bindings** | Least privilege held — no scope creep | `gcloud projects get-iam-policy` filtered to the SA returns exactly 4 roles |
+| No `editor` / `owner` on the SA | The build isn't leaning on the default compute SA (which carries `roles/editor`) | grep the bound roles for `editor|owner` |
+| APIs enabled | 17.3's `gcloud run deploy` etc. won't fail on a disabled service | `setup_gcp.sh` enables `run`, `artifactregistry`, `secretmanager`, `sqladmin` |
+
+The two that are **graded**: image-in-registry, and exactly-4-roles. "Exactly 4"
+is literal — a 5th binding fails even if it's harmless.
+
+What you are **not** verifying here: that the gateway responds to requests, that
+secrets resolve, that Postgres connects. None of that exists yet — the image is
+sitting in a registry, not deployed. That's Session 17.3.
+
+---
+
+## Is there a UI?
+
+**No application UI.** This build produces no web app, no frontend, no
+endpoint. `epoch-api:v1` is a *container image at rest* in a registry — it is
+not executing anywhere. The gateway gets a public URL only when Session 17.3
+deploys it to Cloud Run. Until then there is nothing to open in a browser and
+nothing to `curl`.
+
+**But everything it created is visible in the Google Cloud Console** (the web UI
+at <https://console.cloud.google.com>). For project `epoch-prod-762035`:
+
+| What | Console link |
+|---|---|
+| The pushed image + tags | <https://console.cloud.google.com/artifacts/docker/epoch-prod-762035/us-central1/epoch-images> |
+| The service account | <https://console.cloud.google.com/iam-admin/serviceaccounts?project=epoch-prod-762035> |
+| Its role bindings (the "exactly 4") | <https://console.cloud.google.com/iam-admin/iam?project=epoch-prod-762035> — filter members to `epoch-gateway-sa` |
+| Enabled APIs | <https://console.cloud.google.com/apis/dashboard?project=epoch-prod-762035> |
+| Billing / credit burn | <https://console.cloud.google.com/billing> |
+
+So: verification is **CLI-first** (`bash verify.sh`), and you can cross-check any
+of it by eye in the Console. There is no dashboard specific to this build.
+
+---
+
 ## Files
 
 | File | Responsibility |
